@@ -68,22 +68,23 @@ class Classifier:
 
 class NavieBayes(Classifier):
     def __init__(self, get_features):
-        self.fc = {}
-        self.cc = {}
-        self.get_features = get_features
+        Classifier.__init__(self, get_features)
         self.thresholds = {}
 
+    # 简单的乘积
     def doc_prob(self, item, cat):
         features = self.get_features(item)
         p = 1
         for f in features: p *= self.weighted_prob(f, cat, self.fprob)
         return p
 
+    # 分类的概率与文档文档特征概率乘积
     def prob(self, item, cat):
         cat_prob = self.catcount(cat) / self.total_count()
         doc_prob = self.doc_prob(item, cat)
         return cat_prob * doc_prob
 
+    # 设定阈值
     def set_thresholds(self, cat, t):
         self.thresholds[cat] = t
 
@@ -94,12 +95,15 @@ class NavieBayes(Classifier):
     def classify(self, item, default=None):
         probs = {}
         max = 0.0
+
+        # 寻找概率最大的分类
         for cat in self.categories():
             probs[cat] = self.prob(item, cat)
             if probs[cat] > max:
                 max = probs[cat]
                 best = cat
 
+        # 确保概率值超出阈值*次大概率值
         for cat in probs:
             if cat == best: continue
             if probs[cat] * self.get_thresholds(best) > probs[best]: return default
@@ -119,6 +123,7 @@ class Fisher(Classifier):
         # 特征在所有分类中出现的概率
         freq_sum = sum([self.fprob(f, c) for c in self.categories()])
 
+        # 分类中出现频率 除以 总频率
         return clf / freq_sum
 
     def prob(self, item, cat):
