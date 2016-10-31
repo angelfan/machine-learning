@@ -1,7 +1,6 @@
 # coding: utf-8
 
 import re
-import math
 
 
 def get_words(doc):
@@ -40,6 +39,17 @@ class Classifier:
             return float(self.fc[f][cat])
         return 0.0
 
+    # 计算单词在分类中出现的概率
+    def fprob(self, f, cat):
+        if self.catcount(cat) == 0: return 0
+        return self.fcount(f, cat) / self.catcount(cat)
+
+    # 加权
+    def weighted_prob(self, f, cat, prf, weight=1.0, ap=0.5):
+        basic_prob = prf(f, cat)
+        totals = sum([self.fcount(f, c) for c in self.categories()])
+        return (weight * ap + totals * basic_prob) / (weight + totals)
+
     # 属于某一分类的内容项数量
     def catcount(self, cat):
         if cat in self.cc:
@@ -55,6 +65,46 @@ class Classifier:
         return self.cc.keys()
 
 
+class NavieBayes(Classifier):
+    def __init__(self, get_features):
+        self.fc = {}
+        self.cc = {}
+        self.get_features = get_features
+        self.thresholds = {}
+
+    def doc_prob(self, item, cat):
+        features = self.get_features(item)
+        p = 1
+        for f in features: p *= self.weighted_prob(f, cat, self.fprob)
+        return p
+
+    def prob(self, item, cat):
+        cat_prob = self.catcount(cat) / self.total_count()
+        doc_prob = self.doc_prob(item, cat)
+        return cat_prob * doc_prob
+
+    def set_thresholds(self, cat, t):
+        self.thresholds[cat] = t
+
+    def get_thresholds(self, cat):
+        if cat not in self.thresholds: return 1.0
+        return self.thresholds[cat]
+
+    def classify(self, item, default=None):
+        probs = {}
+        max = 0.0
+        for cat in self.categories():
+            probs[cat] = self.prob(item, cat)
+            if probs[cat] > max:
+                max = probs[cat]
+                best = cat
+
+        for cat in probs:
+            if cat == best: continue
+            if probs[cat] * self.get_thresholds(best) > probs[best]: return default
+        return best
+
+
 def sample_train(cl):
     cl.train('Nobody owns the water.', 'good')
     cl.train('the quick rabbit jumps fences', 'good')
@@ -62,7 +112,8 @@ def sample_train(cl):
     cl.train('make quick money at the onlune casino', 'bad')
     cl.train('the quick brown fox iumps over the lazy dog', 'good')
 
-cl = Classifier(get_words)
-sample_train(cl)
-print cl.fcount('quick', 'good')
-print cl.fcount('quick', 'bad')
+
+bys = NavieBayes(get_words)
+sample_train(bys)
+print bys.classify('quick rabbit')
+print bys.classify('quick money')
